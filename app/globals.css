@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Design tokens
+
+   A friendly, food-app palette: warm off-white page, white cards, and one
+   green accent. Status colours are semantic and used consistently everywhere
+   (cards, badges, summary tiles, filter chips).
+--------------------------------------------------------------------------- */
+@theme {
+  --color-canvas: #f6f8f6;
+  --color-surface: #ffffff;
+  --color-line: #e8ebe9;
+  --color-ink: #182019;
+  --color-ink-soft: #6a7671;
+
+  --color-brand-50: #edfaf1;
+  --color-brand-100: #d4f3de;
+  --color-brand-500: #22a559;
+  --color-brand-600: #16884a;
+  --color-brand-700: #0f6b3a;
+
+  --color-available-bg: #e7f7ed;
+  --color-available-fg: #10693c;
+  --color-finished-bg: #fdeaea;
+  --color-finished-fg: #b3352f;
+  --color-low-bg: #fdf3e0;
+  --color-low-fg: #9a6410;
+
+  --radius-xl2: 1.125rem;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Keyboard users get a clear ring; pointer users do not see it. */
+:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}
+
+/* Stop iOS Safari zooming in when a form field is focused. */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+@keyframes drawer-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes drawer-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes drawer-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-fade-in {
+  animation: drawer-fade-in 0.18s ease-out both;
+}
+
+.animate-pop-in {
+  animation: drawer-pop-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-slide-in {
+  animation: drawer-slide-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Respect a reduced-motion preference across the whole app. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
