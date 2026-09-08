@@ -8,6 +8,10 @@
  *   npm run build && npm run start   # in one terminal
  *   npm run test:e2e                 # in another
  */
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
 import nextEnv from "@next/env";
 import { chromium } from "playwright";
 
@@ -20,6 +24,17 @@ const VIEWER = { email: process.env.VIEWER_EMAIL, password: process.env.VIEWER_P
 
 const passed = [];
 const failed = [];
+
+/** A genuine 2x2 PNG, used to exercise the photo upload path. */
+const FIXTURE_DIR = mkdtempSync(path.join(tmpdir(), "drawer-e2e-"));
+const FIXTURE_PNG = path.join(FIXTURE_DIR, "item.png");
+writeFileSync(
+  FIXTURE_PNG,
+  Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAF0lEQVR42mP8z8BQz0AEYBxVSF+FAAsuBRUZOwYRAAAAAElFTkSuQmCC",
+    "base64",
+  ),
+);
 
 function check(name, ok, detail = "") {
   (ok ? passed : failed).push(name);
@@ -216,11 +231,40 @@ try {
 
   await page.getByRole("spinbutton", { name: "Quantity" }).fill("3");
   await page.getByLabel("Unit").fill("boxes");
-  await page.getByLabel("Icon").fill("🥣");
+
+  // Photo upload: the same input the "Choose file" button opens.
+  await page.locator('input[type="file"]:not([capture])').setInputFiles(FIXTURE_PNG);
+  await page.waitForFunction(
+    () => document.querySelector('[role="dialog"] img') !== null,
+    null,
+    { timeout: 15000 },
+  );
+  const uploadedSrc = await page.locator('[role="dialog"] img').first().getAttribute("src");
+  check(
+    "uploaded photo is stored under /uploads/",
+    /^\/uploads\/[a-f0-9-]{36}\.(png|jpg|webp|gif)$/.test(uploadedSrc ?? ""),
+    String(uploadedSrc),
+  );
+  check(
+    "the camera input requests the rear camera on mobile",
+    (await page.locator('input[type="file"][capture]').getAttribute("capture")) === "environment",
+  );
+
   await page.getByRole("button", { name: "Add item", exact: true }).last().click();
   await page.waitForSelector('[role="status"]', { timeout: 10000 });
   check("adding an item shows a success notification", (await page.textContent('[role="status"]')).includes('Added "E2E Test Cereal"'));
   check("new item appears immediately", (await visibleItemNames(page)).includes("E2E Test Cereal"));
+  check(
+    "the item card shows the uploaded photo",
+    (await page
+      .locator('article:has(h3:text-is("E2E Test Cereal")) img')
+      .first()
+      .getAttribute("src")) === uploadedSrc,
+  );
+  check(
+    "the uploaded file is actually served",
+    (await page.evaluate(async (u) => (await fetch(u)).status, uploadedSrc)) === 200,
+  );
 
   await page.getByLabel("Edit E2E Test Cereal").click();
   await page.getByLabel("Item name").fill("E2E Test Muesli");
@@ -296,6 +340,12 @@ try {
     { timeout: 10000 },
   );
   check("confirming deletes the item", true);
+
+  await page.waitForTimeout(1000);
+  check(
+    "deleting an item also removes its photo from disk",
+    (await page.evaluate(async (u) => (await fetch(u)).status, uploadedSrc)) === 404,
+  );
 
   // -------------------------------------------------------------------------
   console.log("\n--- CATEGORIES ---");

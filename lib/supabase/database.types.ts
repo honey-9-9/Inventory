@@ -132,7 +132,6 @@ export type Database = {
           category_id: string
           created_at: string
           description: string | null
-          icon: string | null
           id: string
           image_url: string | null
           is_demo: boolean
@@ -145,7 +144,6 @@ export type Database = {
           category_id: string
           created_at?: string
           description?: string | null
-          icon?: string | null
           id?: string
           image_url?: string | null
           is_demo?: boolean
@@ -158,7 +156,6 @@ export type Database = {
           category_id?: string
           created_at?: string
           description?: string | null
-          icon?: string | null
           id?: string
           image_url?: string | null
           is_demo?: boolean
@@ -212,7 +209,6 @@ export type Database = {
           category_id: string
           created_at: string
           description: string | null
-          icon: string | null
           id: string
           image_url: string | null
           is_demo: boolean

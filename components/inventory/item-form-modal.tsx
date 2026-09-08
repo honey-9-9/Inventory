@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { SelectField, TextAreaField, TextField } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import type { Item } from "@/lib/types";
+import { discardItemImage } from "@/app/actions/images";
 import { fieldErrorsFrom, itemSchema } from "@/lib/validation";
 
+import { ImagePicker } from "./image-picker";
 import { useInventory } from "./inventory-provider";
 
 /** Starting points only - the Unit field stays free text so any unit works. */
@@ -50,7 +52,6 @@ type FormState = {
   unit: string;
   description: string;
   imageUrl: string;
-  icon: string;
 };
 
 const BLANK: FormState = {
@@ -60,7 +61,6 @@ const BLANK: FormState = {
   unit: "packets",
   description: "",
   imageUrl: "",
-  icon: "",
 };
 
 function ItemFormDialog({ item, onClose }: Omit<ItemFormModalProps, "open">) {
@@ -76,7 +76,6 @@ function ItemFormDialog({ item, onClose }: Omit<ItemFormModalProps, "open">) {
           unit: item.unit,
           description: item.description ?? "",
           imageUrl: item.image_url ?? "",
-          icon: item.icon ?? "",
         }
       : { ...BLANK, categoryId: categories[0]?.id ?? "" },
   );
@@ -84,7 +83,21 @@ function ItemFormDialog({ item, onClose }: Omit<ItemFormModalProps, "open">) {
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Photos upload as soon as they are picked, so the preview is instant. If the
+  // form is then cancelled, those files would be orphaned - remember them so
+  // they can be cleaned up.
+  const uploadedThisSession = useRef<string[]>([]);
+
   const isEditing = item !== null;
+
+  async function handleCancel() {
+    const toDiscard = uploadedThisSession.current.filter((url) => url !== item?.image_url);
+    uploadedThisSession.current = [];
+    onClose();
+    // Fire and forget: the dialog is already closed and a failed cleanup is
+    // not worth interrupting the user for.
+    await Promise.all(toDiscard.map((url) => discardItemImage(url).catch(() => undefined)));
+  }
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -109,7 +122,6 @@ function ItemFormDialog({ item, onClose }: Omit<ItemFormModalProps, "open">) {
       unit: form.unit,
       description: form.description,
       imageUrl: form.imageUrl,
-      icon: form.icon,
     });
 
     if (!parsed.success) {
@@ -124,7 +136,6 @@ function ItemFormDialog({ item, onClose }: Omit<ItemFormModalProps, "open">) {
     formData.set("unit", form.unit);
     formData.set("description", form.description);
     formData.set("imageUrl", form.imageUrl);
-    formData.set("icon", form.icon);
 
     setSaving(true);
     const result = isEditing ? await edit(item.id, formData) : await add(formData);
@@ -136,10 +147,15 @@ function ItemFormDialog({ item, onClose }: Omit<ItemFormModalProps, "open">) {
       return;
     }
 
+    const superseded = uploadedThisSession.current.filter((url) => url !== result.data.image_url);
+    uploadedThisSession.current = [];
+
     notify(
       isEditing ? `Saved changes to "${result.data.name}".` : `Added "${result.data.name}".`,
     );
     onClose();
+
+    await Promise.all(superseded.map((url) => discardItemImage(url).catch(() => undefined)));
   }
 
   const noCategories = categories.length === 0;
@@ -147,7 +163,7 @@ function ItemFormDialog({ item, onClose }: Omit<ItemFormModalProps, "open">) {
   return (
     <Modal
       open
-      onClose={saving ? () => {} : onClose}
+      onClose={saving ? () => {} : handleCancel}
       title={isEditing ? "Edit item" : "Add item"}
       description={
         isEditing
@@ -179,7 +195,7 @@ function ItemFormDialog({ item, onClose }: Omit<ItemFormModalProps, "open">) {
             autoComplete="off"
           />
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div>
             <SelectField
               label="Category"
               required
@@ -197,15 +213,6 @@ function ItemFormDialog({ item, onClose }: Omit<ItemFormModalProps, "open">) {
               ))}
             </SelectField>
 
-            <TextField
-              label="Icon"
-              value={form.icon}
-              onChange={(event) => update("icon", event.target.value)}
-              error={errors.icon}
-              placeholder="🍪"
-              maxLength={8}
-              hint="An emoji shown on the card."
-            />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -251,15 +258,17 @@ function ItemFormDialog({ item, onClose }: Omit<ItemFormModalProps, "open">) {
             maxLength={500}
           />
 
-          <TextField
-            label="Image URL"
-            type="url"
-            value={form.imageUrl}
-            onChange={(event) => update("imageUrl", event.target.value)}
-            error={errors.imageUrl}
-            placeholder="https://example.com/biscuits.jpg"
-            hint="Leave blank to use the icon instead."
+          <ImagePicker
+            value={form.imageUrl === "" ? null : form.imageUrl}
+            onChange={(url) => update("imageUrl", url ?? "")}
+            onUploaded={(url) => uploadedThisSession.current.push(url)}
+            itemName={form.name}
           />
+          {errors.imageUrl ? (
+            <p className="text-xs font-medium text-finished-fg" role="alert">
+              {errors.imageUrl}
+            </p>
+          ) : null}
 
           {formError ? (
             <p
@@ -271,7 +280,7 @@ function ItemFormDialog({ item, onClose }: Omit<ItemFormModalProps, "open">) {
           ) : null}
 
           <div className="flex flex-col-reverse gap-2 border-t border-line pt-4 sm:flex-row sm:justify-end">
-            <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>
+            <Button type="button" variant="secondary" onClick={handleCancel} disabled={saving}>
               Cancel
             </Button>
             <Button type="submit" loading={saving}>

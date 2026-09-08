@@ -116,7 +116,7 @@ someone with the public anon key would do.
 profiles(id → auth.users, name, email, role, created_at)
 categories(id, name, is_demo, created_at, updated_at)
 items(id, name, category_id → categories, quantity, unit,
-      description, image_url, icon, is_demo, created_at, updated_at)
+      description, image_url, is_demo, created_at, updated_at)
 app_settings(key, value, updated_at)
 activity_logs(id, user_id → profiles, item_id → items, item_name,
               action, field, old_value, new_value, created_at)
@@ -138,6 +138,19 @@ A few decisions worth knowing:
   so finished items are not counted twice. The threshold lives in
   `app_settings` and is editable from Settings — no code change needed.
 - **Sample data** is flagged `is_demo` and can be removed from Settings.
+- **Item photos** are uploaded from the camera (on a phone) or the file picker,
+  and stored on disk under `public/uploads/`, with `items.image_url` holding
+  the path. The browser downscales large photos first, and the server checks
+  the file's magic bytes rather than trusting its name or declared type, so a
+  script renamed `photo.jpg` is rejected. Files are deleted when the item is
+  deleted, when its photo is replaced, and when a half-filled form is
+  cancelled.
+
+  > Local files do **not** survive a deploy to a host with an ephemeral
+  > filesystem such as Vercel - uploads would disappear on each redeploy.
+  > `lib/image-storage.ts` is the only module that touches the filesystem, so
+  > moving to Supabase Storage or S3 means reimplementing `saveImage` /
+  > `deleteImage` there and changing nothing else.
 
 ---
 
@@ -154,7 +167,7 @@ A few decisions worth knowing:
 | `npm run db:reset`          | Recreate the database from migrations + `seed.sql`        |
 | `npm run db:seed-users`     | Create/update the admin and viewer accounts               |
 | `npm run verify:permissions`| 20 checks that the database enforces the permission model |
-| `npm run test:e2e`          | 54 browser checks (needs the app running)                 |
+| `npm run test:e2e`          | 59 browser checks (needs the app running)                 |
 
 The two test suites are the ones to run after any change:
 
@@ -205,6 +218,7 @@ components/
   ui/               button, field, modal, toast, badges, skeletons
   inventory/        provider, item card, quantity control, form modal
 lib/
+  image-storage.ts  the only module that reads/writes uploaded photos
   supabase/         browser / server / proxy clients + generated DB types
   auth.ts           requireUser / requireAdmin route guards
   data.ts           read queries

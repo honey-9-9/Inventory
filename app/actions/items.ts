@@ -7,6 +7,7 @@ import {
   revalidateApp,
   succeed,
 } from "@/lib/action-helpers";
+import { deleteImage } from "@/lib/image-storage";
 import { createClient } from "@/lib/supabase/server";
 import type { ActionResult, Item } from "@/lib/types";
 import { fieldErrorsFrom, itemSchema, toNumber, toText } from "@/lib/validation";
@@ -21,7 +22,6 @@ function parseItemForm(formData: FormData) {
     unit: toText(formData.get("unit")),
     description: toText(formData.get("description")),
     imageUrl: toText(formData.get("imageUrl")),
-    icon: toText(formData.get("icon")),
   });
 }
 
@@ -44,7 +44,6 @@ export async function createItem(formData: FormData): Promise<ActionResult<Item>
       unit: parsed.data.unit,
       description: parsed.data.description,
       image_url: parsed.data.imageUrl,
-      icon: parsed.data.icon,
     })
     .select(ITEM_COLUMNS)
     .single();
@@ -65,6 +64,15 @@ export async function updateItem(id: string, formData: FormData): Promise<Action
   }
 
   const supabase = await createClient();
+
+  // Read the current photo first so a replaced file can be removed from disk
+  // once the update succeeds.
+  const { data: existing } = await supabase
+    .from("items")
+    .select("image_url")
+    .eq("id", id)
+    .maybeSingle();
+
   // `updated_at` is maintained by the items_set_updated_at trigger, so it stays
   // accurate even for writes that do not come from this action.
   const { data, error } = await supabase
@@ -76,13 +84,17 @@ export async function updateItem(id: string, formData: FormData): Promise<Action
       unit: parsed.data.unit,
       description: parsed.data.description,
       image_url: parsed.data.imageUrl,
-      icon: parsed.data.icon,
     })
     .eq("id", id)
     .select(ITEM_COLUMNS)
     .single();
 
   if (error || !data) return fail(describeDbError(error, "Could not save your changes."));
+
+  // Only after the write is committed, and only if the photo actually changed.
+  if (existing?.image_url && existing.image_url !== parsed.data.imageUrl) {
+    await deleteImage(existing.image_url);
+  }
 
   revalidateApp();
   return succeed(data as Item);
@@ -93,12 +105,19 @@ export async function deleteItem(id: string): Promise<ActionResult<string>> {
   if (!("user" in actor)) return actor;
 
   const supabase = await createClient();
-  const { data, error } = await supabase.from("items").delete().eq("id", id).select("id");
+  const { data, error } = await supabase
+    .from("items")
+    .delete()
+    .eq("id", id)
+    .select("id, image_url");
 
   if (error) return fail(describeDbError(error, "Could not delete that item."));
   if (!data || data.length === 0) {
     return fail("That item no longer exists, or you do not have permission to delete it.");
   }
+
+  // The row is gone, so its photo would be orphaned on disk.
+  await deleteImage(data[0].image_url);
 
   revalidateApp();
   return succeed(id);

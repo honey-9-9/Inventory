@@ -29,8 +29,10 @@ function ItemAvatar({ item }: { item: Item }) {
     return (
       <img
         src={item.image_url}
-        alt=""
+        alt={`Photo of ${item.name}`}
         loading="lazy"
+        // A broken or removed file falls back to the letter avatar rather than
+        // leaving a torn image icon on the card.
         onError={() => setImageFailed(true)}
         className="size-12 shrink-0 rounded-2xl object-cover"
       />
@@ -42,7 +44,7 @@ function ItemAvatar({ item }: { item: Item }) {
       aria-hidden
       className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-canvas text-2xl font-bold text-ink-soft"
     >
-      {item.icon ?? itemInitial(item.name)}
+      {itemInitial(item.name)}
     </div>
   );
 }

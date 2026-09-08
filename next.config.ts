@@ -37,6 +37,16 @@ function localNetworkOrigins(): string[] {
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: localNetworkOrigins(),
+
+  experimental: {
+    /*
+     * Item photos are uploaded through a server action, and the default body
+     * cap is 1MB. The browser downscales before sending (lib/downscale-image),
+     * so this is headroom rather than the expected size; lib/image-storage
+     * enforces the real limit.
+     */
+    serverActions: { bodySizeLimit: "8mb" },
+  },
 };
 
 export default nextConfig;

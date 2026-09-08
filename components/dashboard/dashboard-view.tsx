@@ -15,6 +15,39 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { formatQuantity, greeting, itemInitial } from "@/lib/format";
 import { deriveStatus, isLowStock } from "@/lib/status";
+import type { Item } from "@/lib/types";
+
+/* eslint-disable @next/next/no-img-element -- item photos are arbitrary local
+   or external URLs, which next/image's allow-list would reject. */
+
+/**
+ * Small square photo for the compact dashboard rows, falling back to a letter
+ * avatar when an item has no picture or the file has gone missing.
+ */
+function ItemThumbnail({ item, dimmed = false }: { item: Item; dimmed?: boolean }) {
+  const [failed, setFailed] = useState(false);
+  const shell = `flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-canvas text-sm font-bold text-ink-soft${dimmed ? " opacity-60" : ""}`;
+
+  if (item.image_url && !failed) {
+    return (
+      <span className={shell}>
+        <img
+          src={item.image_url}
+          alt={`Photo of ${item.name}`}
+          loading="lazy"
+          onError={() => setFailed(true)}
+          className="size-full object-cover"
+        />
+      </span>
+    );
+  }
+
+  return (
+    <span className={shell} aria-hidden>
+      {itemInitial(item.name)}
+    </span>
+  );
+}
 
 /** How many rows the dashboard's compact lists show before linking onward. */
 const PREVIEW_LIMIT = 6;
@@ -81,12 +114,7 @@ export function DashboardView({ userName }: { userName: string }) {
             <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface shadow-sm shadow-black/[0.03]">
               {available.slice(0, PREVIEW_LIMIT).map((item) => (
                 <li key={item.id} className="flex items-center gap-3 px-4 py-3">
-                  <span
-                    aria-hidden
-                    className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-canvas text-lg"
-                  >
-                    {item.icon ?? itemInitial(item.name)}
-                  </span>
+                  <ItemThumbnail item={item} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold text-ink">{item.name}</p>
                     <p className="truncate text-xs text-ink-soft">
@@ -123,12 +151,7 @@ export function DashboardView({ userName }: { userName: string }) {
             <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface shadow-sm shadow-black/[0.03]">
               {finished.slice(0, PREVIEW_LIMIT).map((item) => (
                 <li key={item.id} className="flex items-center gap-3 px-4 py-3">
-                  <span
-                    aria-hidden
-                    className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-canvas text-lg opacity-60"
-                  >
-                    {item.icon ?? itemInitial(item.name)}
-                  </span>
+                  <ItemThumbnail item={item} dimmed />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold text-ink">{item.name}</p>
                     <p className="truncate text-xs text-ink-soft">{item.category?.name}</p>

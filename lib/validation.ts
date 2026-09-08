@@ -16,9 +16,15 @@ const optionalText = (max: number) =>
     .default(null);
 
 /**
- * Only http(s) URLs are accepted. This is what stops a `javascript:` or
- * `data:` URL from being persisted and later rendered into an image src.
+ * An item photo is either a file this app stored (`/uploads/<uuid>.jpg`) or an
+ * external http(s) URL.
+ *
+ * Everything else is rejected, which is what stops a `javascript:` or `data:`
+ * URL being persisted and later rendered into an image src. The local form is
+ * pinned to a UUID filename so a crafted path cannot point somewhere else.
  */
+const UPLOAD_PATH = /^\/uploads\/[a-f0-9-]{36}\.(jpg|png|webp|gif)$/i;
+
 const imageUrl = z
   .string()
   .trim()
@@ -29,6 +35,7 @@ const imageUrl = z
   .refine(
     (value) => {
       if (value === null) return true;
+      if (UPLOAD_PATH.test(value)) return true;
       try {
         const { protocol } = new URL(value);
         return protocol === "http:" || protocol === "https:";
@@ -36,7 +43,7 @@ const imageUrl = z
         return false;
       }
     },
-    { message: "Enter a valid http(s) image URL" },
+    { message: "That image could not be used. Upload a photo or paste an http(s) URL." },
   );
 
 export const itemSchema = z.object({
@@ -58,7 +65,6 @@ export const itemSchema = z.object({
     .max(30, "Unit must be 30 characters or fewer"),
   description: optionalText(500),
   imageUrl,
-  icon: optionalText(8),
 });
 
 export type ItemInput = z.infer<typeof itemSchema>;

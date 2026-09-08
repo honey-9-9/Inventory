@@ -22,16 +22,16 @@ values
   ('Other',        true)
 on conflict do nothing;
 
-insert into public.items (name, category_id, quantity, unit, description, icon, is_demo)
-select v.name, c.id, v.quantity, v.unit, v.description, v.icon, true
+insert into public.items (name, category_id, quantity, unit, description, is_demo)
+select v.name, c.id, v.quantity, v.unit, v.description, true
 from (values
-  ('Biscuits',  'Snacks',       2, 'packets', 'Chocolate biscuits',        '🍪'),
-  ('Chocolate', 'Chocolate',    1, 'bar',     'Dark chocolate, 70%',       '🍫'),
-  ('Peanuts',   'Snacks',       3, 'packets', 'Roasted and salted',        '🥜'),
-  ('Chips',     'Snacks',       0, 'packets', 'Ran out - restock these',   '🥔'),
-  ('Juice',     'Drinks',       0, 'bottles', 'Orange juice',              '🧃'),
-  ('Maggi',     'Instant Food', 4, 'packets', 'Two-minute noodles',        '🍜')
-) as v(name, category, quantity, unit, description, icon)
+  ('Biscuits',  'Snacks',       2, 'packets', 'Chocolate biscuits'),
+  ('Chocolate', 'Chocolate',    1, 'bar',     'Dark chocolate, 70%'),
+  ('Peanuts',   'Snacks',       3, 'packets', 'Roasted and salted'),
+  ('Chips',     'Snacks',       0, 'packets', 'Ran out - restock these'),
+  ('Juice',     'Drinks',       0, 'bottles', 'Orange juice'),
+  ('Maggi',     'Instant Food', 4, 'packets', 'Two-minute noodles')
+) as v(name, category, quantity, unit, description)
 join public.categories c on lower(c.name) = lower(v.category)
 where not exists (
   select 1 from public.items i where lower(i.name) = lower(v.name)
