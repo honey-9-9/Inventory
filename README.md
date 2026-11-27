@@ -206,8 +206,8 @@ holds the data.
 
 1. Set up hosted Supabase as in **Option A** above.
 2. Push the repo to GitHub. `.env.local` is gitignored, so no keys go with it.
-3. Import the repo into [Vercel](https://vercel.com) (Netlify, Render and Fly
-   work too — anything that runs a Node server). Next.js needs no extra config.
+3. Import the repo into [Vercel](https://vercel.com). Next.js needs no extra
+   config, and the free Hobby plan is enough for a personal drawer.
 4. Add the environment variables in the host's dashboard:
    `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and
    `SUPABASE_SERVICE_ROLE_KEY`. Mark the service-role key as a secret — it
@@ -220,6 +220,28 @@ holds the data.
    are now reachable from the internet.
 
 Docker is not involved anywhere in this list.
+
+### Photos and the host's filesystem
+
+Photos go to the `item-images` bucket in Supabase Storage, created by
+`…_item_image_storage.sql`, so the app writes nothing to its own disk and
+deploys freely to a read-only host like Vercel.
+
+They used to be written to `public/uploads`. That works only where the
+filesystem is both writable and persistent — a VPS, or a Render service with a
+disk attached. On Vercel the filesystem is read-only and saving a photo fails
+outright, which is why Storage is the default.
+
+The bucket is public-read: object names are UUIDs, and a plain URL keeps the
+`<img>` src free of signing and expiry. Writing is admin-only, enforced by
+policies on `storage.objects` rather than by the upload action alone.
+
+### A note on the free tier
+
+Supabase pauses a free project after a week with no activity. For an app used
+a few times a week this never comes up; if the drawer goes quiet for longer,
+the first visit afterwards will fail until you resume the project from the
+dashboard. The Pro plan removes this.
 
 ---
 

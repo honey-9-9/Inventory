@@ -1,27 +1,29 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
-import path from "node:path";
+
+import { createClient } from "@/lib/supabase/server";
 
 /**
  * Item photo storage.
  *
- * Files are written to `public/uploads/`, which Next serves directly, so a
- * saved photo is reachable at `/uploads/<id>.<ext>`.
+ * Photos live in the `item-images` bucket of the same Supabase project as the
+ * data. The bucket is public-read, so a stored photo is reachable at a plain
+ * URL with nothing to sign and nothing to expire.
  *
- * This is the ONLY module that touches the filesystem. Swapping to Supabase
- * Storage (or S3) later means reimplementing `saveImage` / `deleteImage` here
- * and changing nothing else - note that local files do not survive a deploy to
- * a host with an ephemeral filesystem, such as Vercel.
+ * This is the ONLY module that knows where photos are kept. It previously
+ * wrote to `public/uploads`, which needs a host with a real, persistent disk -
+ * on Vercel the filesystem is read-only and saving a photo fails outright.
+ *
+ * Uploading and deleting go through the caller's own session, so the policies
+ * on `storage.objects` apply: only an admin can write here, and that holds
+ * even for someone calling the Storage API directly.
  */
 
-export const UPLOADS_URL_PREFIX = "/uploads/";
+export const BUCKET = "item-images";
 
 /** Generous ceiling; the client downscales before uploading. */
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
-
-const UPLOADS_DIR = path.join(process.cwd(), "public", "uploads");
 
 /**
  * Accepted formats, keyed by the magic bytes that actually start the file.
@@ -60,15 +62,23 @@ const SIGNATURES: Array<{ ext: string; mime: string; matches: (bytes: Uint8Array
 
 export const ACCEPTED_MIME_TYPES = SIGNATURES.map((entry) => entry.mime);
 
+/**
+ * A URL this app owns and may delete: the public URL of an object in our
+ * bucket, whose name is a bare UUID. Anything else - an external URL someone
+ * pasted, or a crafted path - fails to match and is left alone.
+ */
+const MANAGED_URL =
+  /\/storage\/v1\/object\/public\/item-images\/([a-f0-9-]{36}\.(?:jpg|png|webp|gif))(?:\?.*)?$/i;
+
 export type SaveImageResult =
   | { ok: true; url: string }
   | { ok: false; error: string };
 
 /**
- * Writes an uploaded image and returns the URL to store on the item.
+ * Stores an uploaded image and returns the URL to put on the item.
  *
- * The filename is a fresh UUID, never anything the client supplied, so a name
- * like `../../server.js` cannot escape the uploads directory.
+ * The object name is a fresh UUID, never anything the client supplied, so a
+ * name like `../../secret` cannot escape the bucket.
  */
 export async function saveImage(file: File): Promise<SaveImageResult> {
   if (file.size === 0) return { ok: false, error: "That file is empty." };
@@ -85,37 +95,41 @@ export async function saveImage(file: File): Promise<SaveImageResult> {
     return { ok: false, error: "That file is not a JPEG, PNG, WebP or GIF image." };
   }
 
-  await mkdir(UPLOADS_DIR, { recursive: true });
+  const supabase = await createClient();
+  const objectName = `${randomUUID()}.${signature.ext}`;
 
-  const filename = `${randomUUID()}.${signature.ext}`;
-  await writeFile(path.join(UPLOADS_DIR, filename), bytes);
+  const { error } = await supabase.storage.from(BUCKET).upload(objectName, bytes, {
+    // Trust the sniffed type, not the one the browser declared.
+    contentType: signature.mime,
+    upsert: false,
+  });
 
-  return { ok: true, url: `${UPLOADS_URL_PREFIX}${filename}` };
+  if (error) {
+    return { ok: false, error: "That image could not be saved. Please try again." };
+  }
+
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(objectName);
+  return { ok: true, url: data.publicUrl };
 }
 
-/** True when the URL points at a file this app owns and may delete. */
+/** True when the URL points at an object this app owns and may delete. */
 export function isManagedUpload(url: string | null | undefined): boolean {
-  if (!url || !url.startsWith(UPLOADS_URL_PREFIX)) return false;
-
-  const filename = url.slice(UPLOADS_URL_PREFIX.length);
-  // Only a bare UUID-style filename, so nothing can be coaxed into deleting a
-  // file elsewhere on disk.
-  return /^[a-f0-9-]{36}\.(jpg|png|webp|gif)$/i.test(filename);
+  return Boolean(url) && MANAGED_URL.test(url!);
 }
 
 /**
- * Deletes a previously uploaded file. External URLs and anything that fails
- * the ownership check are ignored, and a missing file is not an error - the
- * goal is simply that it is gone.
+ * Deletes a previously uploaded photo. External URLs and anything that fails
+ * the ownership check are ignored, and an object that is already gone is not
+ * an error - the goal is simply that it is no longer there.
  */
 export async function deleteImage(url: string | null | undefined): Promise<void> {
-  if (!isManagedUpload(url)) return;
-
-  const filename = url!.slice(UPLOADS_URL_PREFIX.length);
+  const match = url?.match(MANAGED_URL);
+  if (!match) return;
 
   try {
-    await unlink(path.join(UPLOADS_DIR, filename));
+    const supabase = await createClient();
+    await supabase.storage.from(BUCKET).remove([match[1]]);
   } catch {
-    // Already deleted, or never written. Nothing to do.
+    // Already deleted, or never stored. Nothing to do.
   }
 }

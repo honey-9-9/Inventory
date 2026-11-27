@@ -285,8 +285,10 @@ try {
   );
   const uploadedSrc = await page.locator('[role="dialog"] img').first().getAttribute("src");
   check(
-    "uploaded photo is stored under /uploads/",
-    /^\/uploads\/[a-f0-9-]{36}\.(png|jpg|webp|gif)$/.test(uploadedSrc ?? ""),
+    "uploaded photo is stored in the item-images bucket",
+    /\/storage\/v1\/object\/public\/item-images\/[a-f0-9-]{36}\.(png|jpg|webp|gif)$/.test(
+      uploadedSrc ?? "",
+    ),
     String(uploadedSrc),
   );
   check(
@@ -420,8 +422,10 @@ try {
 
   await page.waitForTimeout(1000);
   check(
-    "deleting an item also removes its photo from disk",
-    (await page.evaluate(async (u) => (await fetch(u)).status, uploadedSrc)) === 404,
+    // Storage answers 400 for a missing object rather than 404, so assert on
+    // "no longer served" rather than on one exact status code.
+    "deleting an item also removes its photo from storage",
+    (await page.evaluate(async (u) => (await fetch(u)).status, uploadedSrc)) >= 400,
   );
 
   // -------------------------------------------------------------------------

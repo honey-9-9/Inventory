@@ -58,3 +58,7 @@ next-env.d.ts
 # so they are user data rather than source - keep the folder, ignore the files.
 /public/uploads/*
 !/public/uploads/.gitkeep
+
+# Local IDE settings (JetBrains, VS Code workspace state)
+/.idea
+/.vscode
