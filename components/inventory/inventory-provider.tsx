@@ -55,6 +55,27 @@ function sortItems(items: Item[]): Item[] {
 }
 
 /**
+ * A server action whose *request* fails - dropped Wi-Fi, a tab suspended while
+ * the camera app was open, a dev server restarting - rejects instead of
+ * resolving. Unhandled, that rejection escapes the caller's `await`, so the
+ * loading flag it set is never cleared and the form spins for ever, even
+ * though the write may well have reached the database.
+ *
+ * Every action goes through here so callers always get an ActionResult back
+ * and never have to catch anything.
+ */
+const CONNECTION_LOST =
+  "Lost connection to the server, so this could not be confirmed. Reload the page to see what was saved.";
+
+async function attempt<T>(run: () => Promise<ActionResult<T>>): Promise<ActionResult<T>> {
+  try {
+    return await run();
+  } catch {
+    return { ok: false, error: CONNECTION_LOST };
+  }
+}
+
+/**
  * Holds the inventory in client state so the whole app - dashboard totals,
  * the Available and Finished sections, the summary cards - reacts to a single
  * +/- tap immediately, with no page reload and no waiting on a round trip.
@@ -122,7 +143,7 @@ export function InventoryProvider({
         ),
       );
 
-      const result = await adjustQuantity(item.id, delta);
+      const result = await attempt(() => adjustQuantity(item.id, delta));
       const settled = endAdjust(item.id);
 
       if (!result.ok) {
@@ -145,7 +166,7 @@ export function InventoryProvider({
 
   const add = useCallback(
     async (formData: FormData) => {
-      const result = await createItem(formData);
+      const result = await attempt(() => createItem(formData));
       if (result.ok) {
         setItems((current) => sortItems([...current, result.data]));
         router.refresh();
@@ -157,7 +178,7 @@ export function InventoryProvider({
 
   const edit = useCallback(
     async (id: string, formData: FormData) => {
-      const result = await updateItem(id, formData);
+      const result = await attempt(() => updateItem(id, formData));
       if (result.ok) {
         replaceItem(result.data);
         router.refresh();
@@ -169,7 +190,7 @@ export function InventoryProvider({
 
   const remove = useCallback(
     async (item: Item) => {
-      const result = await deleteItem(item.id);
+      const result = await attempt(() => deleteItem(item.id));
       if (result.ok) {
         setItems((current) => current.filter((entry) => entry.id !== item.id));
         router.refresh();

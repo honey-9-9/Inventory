@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { ActivityFeed } from "@/components/activity-feed";
-import { requireUser } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import { getRecentActivity } from "@/lib/data";
 
 export const metadata: Metadata = {
@@ -9,11 +9,12 @@ export const metadata: Metadata = {
 };
 
 /**
- * History is readable by both roles but writable by neither: rows are appended
- * only by the database trigger on `items`.
+ * History is admin-only, and writable by nobody: rows are appended solely by
+ * the database trigger on `items`. The RLS policy on `activity_logs` is the
+ * real gate -- this redirect and the hidden sidebar link are only cosmetic.
  */
 export default async function ActivityPage() {
-  await requireUser();
+  await requireAdmin();
   const entries = await getRecentActivity(100);
 
   return (

@@ -1,7 +1,17 @@
 # Drawer Inventory
 
 A small personal inventory for the food in your drawer. Two accounts: an
-**admin** who manages everything, and a **viewer** who can only look.
+**admin** who manages everything, and a **viewer** who can browse and record
+what they have eaten, but cannot add, edit, restock or delete anything.
+
+| | Admin | Viewer |
+|---|---|---|
+| See the inventory, search, filter | yes | yes |
+| Minus one — record something used | yes | **yes** |
+| Plus one — restock | yes | no |
+| Add / edit / delete items | yes | no |
+| Manage categories and settings | yes | no |
+| See the activity history | yes | no |
 
 Next.js 16 · TypeScript · Tailwind CSS v4 · Supabase (Postgres + Auth + RLS)
 
@@ -99,7 +109,13 @@ what is allowed. Two layers must both agree:
 On top of that:
 
 - `activity_logs` has **no** insert/update/delete policy. History is appended
-  only by a `SECURITY DEFINER` trigger on `items`, so it cannot be forged.
+  only by a `SECURITY DEFINER` trigger on `items`, so it cannot be forged. It
+  is readable by admins only.
+- A viewer's one write is deliberately narrow. RLS cannot say "this column,
+  in this direction", so `items` stays admin-only for direct writes and
+  `adjust_item_quantity()` is the single opening: it is `SECURITY DEFINER`,
+  takes only an item id and a delta, touches nothing but `quantity`, and
+  raises `42501` if a non-admin passes a positive delta.
 - `profiles` has no write policy at all, so no account can promote itself.
   Roles are assigned out-of-band with the service-role key.
 - Public sign-up is disabled in `supabase/config.toml`.

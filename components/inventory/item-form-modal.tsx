@@ -137,9 +137,16 @@ function ItemFormDialog({ item, onClose }: Omit<ItemFormModalProps, "open">) {
     formData.set("description", form.description);
     formData.set("imageUrl", form.imageUrl);
 
+    // `finally`, not a plain assignment: if anything at all rejects, the
+    // Save button must still come out of its loading state rather than
+    // spinning for ever with the dialog stuck open.
     setSaving(true);
-    const result = isEditing ? await edit(item.id, formData) : await add(formData);
-    setSaving(false);
+    let result;
+    try {
+      result = isEditing ? await edit(item.id, formData) : await add(formData);
+    } finally {
+      setSaving(false);
+    }
 
     if (!result.ok) {
       setErrors(result.fieldErrors ?? {});

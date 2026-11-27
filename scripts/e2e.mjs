@@ -125,14 +125,40 @@ try {
       "viewer sees the inventory",
       dashboardText.includes("Biscuits") && dashboardText.includes("Maggi"),
     );
+    check("viewer sees no Activity nav link", !(await page.getByRole("link", { name: "Activity" }).count()));
+    check("viewer sees no Recently updated card", !dashboardText.includes("Recently updated"));
     check("viewer sees no Categories nav link", !(await page.getByRole("link", { name: "Categories" }).count()));
     check("viewer sees no Settings nav link", !(await page.getByRole("link", { name: "Settings" }).count()));
     check("viewer sees no Add item button", !(await page.getByRole("button", { name: "Add item" }).count()));
 
     await page.goto(`${BASE}/inventory`, { waitUntil: "networkidle" });
-    check("viewer has no +/- controls", !(await page.getByLabel("Add one Biscuits").count()));
+    // Inventory is a read-only catalogue for everyone: name, quantity, status.
+    check("inventory cards carry no minus button", !(await page.getByLabel("Use one Biscuits").count()));
+    check("inventory cards carry no plus button", !(await page.getByLabel("Add one Biscuits").count()));
     check("viewer has no edit buttons", !(await page.getByLabel("Edit Biscuits").count()));
     check("viewer has no delete buttons", !(await page.getByLabel("Delete Biscuits").count()));
+
+    // Deducting happens on the dashboard. A viewer eats the snacks, so they may
+    // record what they used - but only downwards.
+    await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle" });
+    check("viewer HAS the minus button on the dashboard", (await page.getByLabel("Use one Biscuits").count()) > 0);
+    check("viewer has no plus button on the dashboard", !(await page.getByLabel("Add one Biscuits").count()));
+
+    const viewerBefore = await quantityOf(page, "Biscuits");
+    await page.getByLabel("Use one Biscuits").first().click();
+    await page.waitForFunction(
+      (expected) => {
+        const el = document.querySelector('[aria-label="Biscuits quantity"]');
+        return el && Number(el.textContent.trim()) === expected;
+      },
+      viewerBefore - 1,
+      { timeout: 10000 },
+    );
+    await page.reload({ waitUntil: "networkidle" });
+    check(
+      "a viewer's deduction is really saved",
+      (await quantityOf(page, "Biscuits")) === viewerBefore - 1,
+    );
 
     // The important one: typing an admin URL directly must not get through.
     await page.goto(`${BASE}/categories`, { waitUntil: "networkidle" });
@@ -142,7 +168,7 @@ try {
     check("viewer typing /settings is redirected to the dashboard", page.url().endsWith("/dashboard"), page.url());
 
     await page.goto(`${BASE}/activity`, { waitUntil: "networkidle" });
-    check("viewer can read the activity history", (await mainText(page)).includes("Activity"));
+    check("viewer typing /activity is redirected to the dashboard", page.url().endsWith("/dashboard"), page.url());
     await page.close();
   }
 
@@ -220,6 +246,24 @@ try {
   console.log("\n--- ADMIN: ADD / EDIT / DELETE ---");
   // -------------------------------------------------------------------------
   await page.getByRole("button", { name: "Add item" }).click();
+
+  // Regression: the dialog used to re-run its focus effect on every render, so
+  // each keystroke knocked focus out of the field -- which dismissed the
+  // on-screen keyboard on phones after a single character. `fill()` sets the
+  // value in one shot and cannot catch it, so type this one key by key.
+  const nameField = page.getByLabel("Item name");
+  await nameField.click();
+  await nameField.pressSequentially("Cornflakes", { delay: 30 });
+  check(
+    "typing keeps focus in the name field",
+    await nameField.evaluate((el) => el === document.activeElement),
+  );
+  check(
+    "every typed character lands in the name field",
+    (await nameField.inputValue()) === "Cornflakes",
+    `got ${JSON.stringify(await nameField.inputValue())}`,
+  );
+
   await page.getByLabel("Item name").fill("");
   await page.getByRole("button", { name: "Add item", exact: true }).last().click();
   check("empty name is rejected", (await page.textContent('[role="dialog"]')).includes("Item name is required"));
@@ -275,6 +319,39 @@ try {
     { timeout: 10000 },
   );
   check("editing an item updates it in place", true);
+
+  // -------------------------------------------------------------------------
+  console.log("\n--- DROPPED CONNECTION DURING SAVE ---");
+  // -------------------------------------------------------------------------
+  // A phone that loses Wi-Fi mid-save (or suspends the tab while the camera is
+  // open) makes the server action reject rather than resolve. The form must
+  // recover and say so instead of spinning for ever with the dialog stuck.
+  {
+    const net = await browser.newPage();
+    await signIn(net, ADMIN);
+    await net.goto(`${BASE}/inventory`, { waitUntil: "networkidle" });
+    await net.getByRole("button", { name: "Add item" }).first().click();
+    await net.getByLabel("Item name").fill("E2E Dropped Save");
+    await net.getByRole("spinbutton", { name: "Quantity" }).fill("1");
+
+    await net.route("**/inventory", async (route) => {
+      if (route.request().method() === "POST") await route.abort("connectionfailed");
+      else await route.continue();
+    });
+    await net.getByRole("button", { name: "Add item", exact: true }).last().click();
+    await net.waitForTimeout(2000);
+
+    check(
+      "a dropped save stops the spinner instead of hanging",
+      !(await net.locator('[role="dialog"] [aria-busy="true"]').count()),
+    );
+    check(
+      "a dropped save explains what happened",
+      (await net.textContent('[role="dialog"]')).includes("Lost connection"),
+    );
+    await net.unroute("**/inventory");
+    await net.close();
+  }
 
   // -------------------------------------------------------------------------
   console.log("\n--- SEARCH AND FILTERS ---");

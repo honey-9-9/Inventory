@@ -25,6 +25,16 @@ export function Modal({ open, onClose, title, description, children, size = "md"
   const titleId = useId();
   const descriptionId = useId();
 
+  // Callers rebuild `onClose` on every render (it closes over form state), so
+  // it must not be an effect dependency: that would tear the effect down and
+  // set it up again on each keystroke, moving focus out of the field being
+  // typed into and dismissing the on-screen keyboard on phones. Read it
+  // through a ref so the setup effect depends only on `open`.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!open) return;
 
@@ -33,7 +43,7 @@ export function Modal({ open, onClose, title, description, children, size = "md"
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
       }
     };
 
@@ -53,7 +63,7 @@ export function Modal({ open, onClose, title, description, children, size = "md"
       document.body.style.overflow = overflow;
       previouslyFocused.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

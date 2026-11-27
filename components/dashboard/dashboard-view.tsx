@@ -91,7 +91,7 @@ export function DashboardView({ userName }: { userName: string }) {
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-5">
-        <section className="lg:col-span-3">
+        <section className={isAdmin ? "lg:col-span-3" : "lg:col-span-5"}>
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="text-lg font-bold text-ink">
               Available{" "}
@@ -121,14 +121,7 @@ export function DashboardView({ userName }: { userName: string }) {
                       {formatQuantity(item.quantity, item.unit)}
                     </p>
                   </div>
-                  {isAdmin ? (
-                    <QuantityControl item={item} />
-                  ) : (
-                    <StatusBadge
-                      quantity={item.quantity}
-                      lowStockThreshold={lowStockThreshold}
-                    />
-                  )}
+                  <QuantityControl item={item} />
                 </li>
               ))}
             </ul>
@@ -170,21 +163,23 @@ export function DashboardView({ userName }: { userName: string }) {
           )}
         </section>
 
-        <section className="lg:col-span-2">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-bold text-ink">Recently updated</h2>
-            <Link
-              href="/activity"
-              className="inline-flex items-center gap-1 text-sm font-semibold text-brand-700 underline-offset-4 transition hover:underline"
-            >
-              History
-              <ArrowRight className="size-3.5" aria-hidden />
-            </Link>
-          </div>
-          <div className="rounded-2xl border border-line bg-surface p-3 shadow-sm shadow-black/[0.03]">
-            <ActivityFeed entries={activity.slice(0, 6)} />
-          </div>
-        </section>
+        {isAdmin ? (
+          <section className="lg:col-span-2">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-lg font-bold text-ink">Recently updated</h2>
+              <Link
+                href="/activity"
+                className="inline-flex items-center gap-1 text-sm font-semibold text-brand-700 underline-offset-4 transition hover:underline"
+              >
+                History
+                <ArrowRight className="size-3.5" aria-hidden />
+              </Link>
+            </div>
+            <div className="rounded-2xl border border-line bg-surface p-3 shadow-sm shadow-black/[0.03]">
+              <ActivityFeed entries={activity.slice(0, 6)} />
+            </div>
+          </section>
+        ) : null}
       </div>
 
       {isAdmin ? (

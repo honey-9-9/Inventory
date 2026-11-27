@@ -10,11 +10,14 @@ import type { Item } from "@/lib/types";
  * number immediately, the request goes out in the background, and nothing
  * reloads.
  *
- * Only rendered for admins - and even if it were rendered for a viewer, the
- * underlying RPC is refused by row level security.
+ * Both roles get the minus button - a viewer is the person actually eating
+ * the snacks, so they are the one who knows something has gone. Only an admin
+ * gets plus, because only an admin restocks. Hiding the button is cosmetic:
+ * `adjust_item_quantity` refuses a positive delta from a viewer, so the rule
+ * holds even for someone calling the database directly.
  */
 export function QuantityControl({ item }: { item: Item }) {
-  const { adjust, busyItemIds } = useInventory();
+  const { adjust, busyItemIds, isAdmin } = useInventory();
   const busy = busyItemIds.has(item.id);
   const canDecrease = item.quantity > 0;
 
@@ -40,15 +43,17 @@ export function QuantityControl({ item }: { item: Item }) {
         {item.quantity}
       </output>
 
-      <button
-        type="button"
-        onClick={() => adjust(item, 1)}
-        disabled={busy}
-        aria-label={`Add one ${item.name}`}
-        className="flex size-9 cursor-pointer items-center justify-center rounded-lg bg-surface text-ink shadow-sm transition hover:bg-white hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        <Plus className="size-4" aria-hidden />
-      </button>
+      {isAdmin ? (
+        <button
+          type="button"
+          onClick={() => adjust(item, 1)}
+          disabled={busy}
+          aria-label={`Add one ${item.name}`}
+          className="flex size-9 cursor-pointer items-center justify-center rounded-lg bg-surface text-ink shadow-sm transition hover:bg-white hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Plus className="size-4" aria-hidden />
+        </button>
+      ) : null}
     </div>
   );
 }

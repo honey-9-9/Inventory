@@ -84,8 +84,32 @@ const vProm = await req(`/rest/v1/profiles?email=eq.${encodeURIComponent(VIEWER.
 check("viewer CANNOT promote self to admin", vProm.status >= 400 || (Array.isArray(vProm.json) && vProm.json.length === 0),
   `status ${vProm.status} ${JSON.stringify(vProm.json)}`);
 
+// A viewer may take stock out of the drawer, and only out.
+const vDown = await req("/rest/v1/rpc/adjust_item_quantity", { token: viewer, method: "POST", body: { p_item_id: biscuits.id, p_delta: -1 } });
+check("viewer CAN use one up (delta -1)", vDown.status === 200, `status ${vDown.status} ${JSON.stringify(vDown.json)}`);
+const vUp = await req("/rest/v1/rpc/adjust_item_quantity", { token: viewer, method: "POST", body: { p_item_id: biscuits.id, p_delta: 1 } });
+check("viewer CANNOT restock (delta +1)", vUp.status >= 400, `status ${vUp.status} ${JSON.stringify(vUp.json)}`);
+// Put back what the -1 above took, so the rest of the suite starts level.
+await req("/rest/v1/rpc/adjust_item_quantity", { token: admin, method: "POST", body: { p_item_id: biscuits.id, p_delta: 1 } });
+
 const vLog = await req("/rest/v1/activity_logs", { token: viewer, method: "POST", body: { item_name: "Fake", action: "created" } });
 check("viewer CANNOT forge activity log", vLog.status >= 400, `status ${vLog.status} ${JSON.stringify(vLog.json)}`);
+
+// The audit trail is admin-only. RLS filters rather than erroring, so a viewer
+// gets 200 with an empty array -- the proof is that it is empty while the
+// admin, reading the same table a line later, sees rows.
+const vLogRead = await req("/rest/v1/activity_logs?select=id&limit=5", { token: viewer });
+check(
+  "viewer CANNOT read activity history",
+  Array.isArray(vLogRead.json) && vLogRead.json.length === 0,
+  `status ${vLogRead.status} ${JSON.stringify(vLogRead.json)}`,
+);
+const aLogRead = await req("/rest/v1/activity_logs?select=id&limit=5", { token: admin });
+check(
+  "admin CAN read activity history",
+  Array.isArray(aLogRead.json),
+  `status ${aLogRead.status} ${JSON.stringify(aLogRead.json)}`,
+);
 
 const vSet = await req("/rest/v1/app_settings?key=eq.low_stock_threshold", { token: viewer, method: "PATCH",
   prefer: "return=representation", body: { value: 99 } });

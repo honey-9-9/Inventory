@@ -3,6 +3,7 @@
 import {
   describeDbError,
   fail,
+  requireActor,
   requireAdminActor,
   revalidateApp,
   succeed,
@@ -132,11 +133,19 @@ export async function deleteItem(id: string): Promise<ActionResult<string>> {
  * even if `delta` is -5.
  */
 export async function adjustQuantity(id: string, delta: number): Promise<ActionResult<Item>> {
-  const actor = await requireAdminActor();
+  const actor = await requireActor();
   if (!("user" in actor)) return actor;
 
   if (!Number.isInteger(delta) || delta === 0 || Math.abs(delta) > 1000) {
     return fail("That quantity change is not valid.");
+  }
+
+  // A viewer records what they have used; only an admin restocks. The same
+  // rule is enforced inside `adjust_item_quantity`, which is what actually
+  // stops a viewer calling the database directly - this is here so the UI
+  // gets a sentence rather than a raw 42501.
+  if (delta > 0 && actor.user.role !== "admin") {
+    return fail("Only an admin can add stock.");
   }
 
   const supabase = await createClient();

@@ -61,6 +61,19 @@ export async function requireAdminActor(): Promise<
   return { ok: true, user };
 }
 
+/**
+ * For the one thing a viewer may also do: record that they used something up.
+ * The caller still has to enforce the direction of the change; this only
+ * establishes who is asking.
+ */
+export async function requireActor(): Promise<
+  { ok: true; user: SessionUser } | ActionResult<never>
+> {
+  const user = await getSessionUser();
+  if (!user) return fail("Your session has expired. Please sign in again.");
+  return { ok: true, user };
+}
+
 const APP_PATHS = ["/dashboard", "/inventory", "/categories", "/activity", "/settings"];
 
 /** Keeps every server-rendered view in step after a mutation. */

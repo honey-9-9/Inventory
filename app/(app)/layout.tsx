@@ -11,10 +11,12 @@ import { getCategories, getItems, getLowStockThreshold, getRecentActivity } from
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
 
+  // The audit trail is admin-only, so a viewer's request never asks for it and
+  // no history ever reaches their browser payload.
   const [items, categories, activity, lowStockThreshold] = await Promise.all([
     getItems(),
     getCategories(),
-    getRecentActivity(),
+    user.role === "admin" ? getRecentActivity() : Promise.resolve([]),
     getLowStockThreshold(),
   ]);
 

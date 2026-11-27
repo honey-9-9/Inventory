@@ -14,7 +14,6 @@ import { deriveStatus } from "@/lib/status";
 import type { Item } from "@/lib/types";
 
 import { useInventory } from "./inventory-provider";
-import { QuantityControl } from "./quantity-control";
 
 type ItemCardProps = {
   item: Item;
@@ -111,16 +110,9 @@ export function ItemCard({ item, onEdit, onDelete }: ItemCardProps) {
         <StatusBadge quantity={item.quantity} lowStockThreshold={lowStockThreshold} />
       </div>
 
-      {isAdmin ? (
-        <div className="mt-4">
-          <QuantityControl item={item} />
-        </div>
-      ) : (
-        <p className="mt-4 border-t border-line pt-3 text-xs text-ink-soft">
-          {item.unit}
-          {item.is_demo ? " · sample item" : ""}
-        </p>
-      )}
+      {item.is_demo ? (
+        <p className="mt-3 text-xs text-ink-soft">Sample item</p>
+      ) : null}
 
       <p className="mt-3 text-xs text-ink-soft/80">
         Updated <RelativeTime iso={item.updated_at} />
